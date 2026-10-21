@@ -1,26 +1,49 @@
 ---
+- name: Validate required inputs
+  ansible.builtin.assert:
+    that:
+      - subnet is defined
+      - mask is defined
+      - subnet | string | length > 0
+      - mask | string | length > 0
+    fail_msg: "Pass subnet and mask using -e 'subnet=192.168.1.0 mask=24'"
+
 - name: API Call
-  ansible.builtin.uri: 
-    url: https://networkcalc.com/api/ip/{{ subnet }}/{{ mask }}
-    return_content: yes
-    validate_certs: no
+  ansible.builtin.uri:
+    url: "https://networkcalc.com/api/ip/{{ subnet }}/{{ mask }}"
+    method: GET
+    return_content: true
+    validate_certs: true
+    timeout: 15
   register: result
+
+- name: Verify API response
+  ansible.builtin.assert:
+    that:
+      - result.json.status == 'OK'
+      - result.json.address is defined
+    fail_msg: "API returned an unexpected response: {{ result.json | default(result.content | default('No content')) }}"
+
 - name: Assignable Hosts
-  set_fact:
-    hosts: " "
+  ansible.builtin.set_fact:
+    hosts: "{{ result.json.address.assignable_hosts }}"
+
 - name: First Address
-  set_fact:
-    first_ip: " "
+  ansible.builtin.set_fact:
+    first_ip: "{{ result.json.address.first_assignable_host }}"
+
 - name: Subnet Mask - Decimal
-  set_fact:
-    mask_decimal: " "
+  ansible.builtin.set_fact:
+    mask_decimal: "{{ result.json.address.subnet_mask }}"
+
 - name: Subnet Mask - CIDR Notation
-  set_fact:
-    mask_cidr: "/"
+  ansible.builtin.set_fact:
+    mask_cidr: "/{{ result.json.address.subnet_bits }}"
+
 - name: Print Results
-  debug:
-    msg: 
-      - "There are {{ hosts }} assignable hosts for the {{ subnet }}/{{ mask }} subnet"
+  ansible.builtin.debug:
+    msg:
+      - "There are {{ hosts }} assignable hosts for the {{ result.json.address.cidr_notation }} subnet"
       - "The first address is {{ first_ip }}"
       - "The subnet mask in decimal form is {{ mask_decimal }}"
       - "The subnet mask in cidr notation is {{ mask_cidr }}"

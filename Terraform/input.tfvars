@@ -1,3 +1,3 @@
-base = "https://networkcalc.com/api/ip/"
+base   = "https://networkcalc.com/api/ip/"
 subnet = "172.16.0.0"
-mask = "33"
+mask   = 24

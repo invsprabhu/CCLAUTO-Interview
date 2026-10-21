@@ -1,37 +1,72 @@
+
 import argparse
+import ipaddress
 import requests
-import json
 
-parser = argparse.ArgumentParser()
-parser.add_argument("mask")
+parser = argparse.ArgumentParser(description="Subnet calculator API test")
+parser.add_argument("subnet", help="Subnet IP, e.g. 192.168.1.0")
+parser.add_argument("mask", help="CIDR prefix, e.g. 24")
 args = parser.parse_args()
-api = "https://networkcalc.com/api/ip"
-class_A = "10.0.0.0"
-class_B = "172.16.0.0"
-class_C = "192.168.1.0"
-mask = args.mask
 
-def api_call():
-    data = requests.get(url).json()
-    global hosts, first_ip, subnet_mask, subnet_bits
 
-def assignable_hosts(hosts, cidr):
-    print("There are",hosts,"assignable hosts for the",cidr,"subnet")
+def api_call(subnet, mask):
+    # Validate subnet and mask
+    network = ipaddress.IPv4Network(
+        f"{subnet}/{mask}", strict=False
+    )
 
-def first_host(first_ip):
-    print("The first address is",first_ip)
+    url = f"https://networkcalc.com/api/ip/{network.network_address}/{network.prefixlen}"
 
-def mask_decimal(subnet_mask):
-    print("The subnet mask in decimal form is", subnet_mask)
+    response = requests.get(url, timeout=15)
+    response.raise_for_status()
 
-def mask_cidr(subnet_bits):
-    subnet_bits = str(subnet_bits)
-    mask_cidr = "/"+subnet_bits
-    print("The subnet mask in cidr notation is", mask_cidr)
+    data = response.json()
 
-if __name__ == '__main__':
-    api_call()
-    assignable_hosts(hosts, cidr)
-    first_host(first_ip)
-    mask_decimal(subnet_mask)
-    mask_cidr(subnet_bits)
+    if data.get("status") != "OK":
+        raise ValueError(f"API returned error: {data}")
+
+    return data["address"]
+
+
+def assignable_hosts(address):
+    print(
+        "There are",
+        address["assignable_hosts"],
+        "assignable hosts for the",
+        address["cidr_notation"],
+        "subnet"
+    )
+
+
+def first_host(address):
+    print(
+        "The first address is",
+        address["first_assignable_host"]
+    )
+
+
+def mask_decimal(address):
+    print(
+        "The subnet mask in decimal form is",
+        address["subnet_mask"]
+    )
+
+
+def mask_cidr(address):
+    print(
+        "The subnet mask in CIDR notation is",
+        f"/{address['subnet_bits']}"
+    )
+
+
+if __name__ == "__main__":
+    try:
+        address = api_call(args.subnet, args.mask)
+
+        assignable_hosts(address)
+        first_host(address)
+        mask_decimal(address)
+        mask_cidr(address)
+
+    except (ValueError, requests.RequestException, KeyError) as error:
+        parser.exit(1, f"Error: {error}\n")
